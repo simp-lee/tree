@@ -2,54 +2,61 @@ package tree
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 )
 
+type TestCategory struct {
+	ID       int    `json:"id"`
+	ParentID int    `json:"parent_id"`
+	Title    string `json:"title"`
+	Sort     int    `json:"sort"`
+}
+
 // TestData 用于生成测试数据
-func getTestData() []map[string]interface{} {
-	return []map[string]interface{}{
-		{"id": 17, "parent_id": 2, "title": "Child 1.3"},
-		{"id": 12, "parent_id": 10, "title": "Child 1.2.2.2.2"},
-		{"id": 14, "parent_id": 12, "title": "Child 1.2.2.2.2.2"},
-		{"id": 2, "parent_id": 1, "title": "Child 1"},
-		{"id": 4, "parent_id": 2, "title": "Child 1.1"},
-		{"id": 5, "parent_id": 2, "title": "Child 1.2"},
-		{"id": 6, "parent_id": 3, "title": "Child 2.1"},
-		{"id": 7, "parent_id": 5, "title": "Child 1.2.1"},
-		{"id": 8, "parent_id": 5, "title": "Child 1.2.2"},
-		{"id": 9, "parent_id": 8, "title": "Child 1.2.2.1"},
-		{"id": 10, "parent_id": 8, "title": "Child 1.2.2.2"},
-		{"id": 11, "parent_id": 10, "title": "Child 1.2.2.2.1"},
-		{"id": 13, "parent_id": 12, "title": "Child 1.2.2.2.2.1"},
-		{"id": 15, "parent_id": 14, "title": "Child 1.2.2.2.2.2.1"},
-		{"id": 3, "parent_id": 1, "title": "Child 2"},
-		{"id": 16, "parent_id": 14, "title": "Child 1.2.2.2.2.2.2"},
-		{"id": 1, "parent_id": 0, "title": "Root"},
+func getTestData() []TestCategory {
+	return []TestCategory{
+		{ID: 17, ParentID: 2, Title: "Child 1.3"},
+		{ID: 12, ParentID: 10, Title: "Child 1.2.2.2.2"},
+		{ID: 14, ParentID: 12, Title: "Child 1.2.2.2.2.2"},
+		{ID: 2, ParentID: 1, Title: "Child 1"},
+		{ID: 4, ParentID: 2, Title: "Child 1.1"},
+		{ID: 5, ParentID: 2, Title: "Child 1.2"},
+		{ID: 6, ParentID: 3, Title: "Child 2.1"},
+		{ID: 7, ParentID: 5, Title: "Child 1.2.1"},
+		{ID: 8, ParentID: 5, Title: "Child 1.2.2"},
+		{ID: 9, ParentID: 8, Title: "Child 1.2.2.1"},
+		{ID: 10, ParentID: 8, Title: "Child 1.2.2.2"},
+		{ID: 11, ParentID: 10, Title: "Child 1.2.2.2.1"},
+		{ID: 13, ParentID: 12, Title: "Child 1.2.2.2.2.1"},
+		{ID: 15, ParentID: 14, Title: "Child 1.2.2.2.2.2.1"},
+		{ID: 3, ParentID: 1, Title: "Child 2"},
+		{ID: 16, ParentID: 14, Title: "Child 1.2.2.2.2.2.2"},
+		{ID: 1, ParentID: 0, Title: "Root"},
 	}
 }
 
 func TestNew(t *testing.T) {
-	tree := New()
+	tree := New[TestCategory]()
 	if tree == nil {
 		t.Fatal("New() returned nil")
-		return
 	}
 	if tree.nodes == nil {
 		t.Error("nodes map not initialized")
 	}
-	if tree.cache == nil {
-		t.Fatal("cache map not initialized")
-		return
+	if tree.children == nil {
+		t.Error("children map not initialized")
 	}
 }
 
 func TestLoad(t *testing.T) {
-	tree := New()
+	tree := New[TestCategory]()
+
 	tests := []struct {
 		name    string
-		data    []map[string]interface{}
+		data    []TestCategory
 		wantErr bool
 	}{
 		{
@@ -59,24 +66,24 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name: "Duplicate ID",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 0},
-				{"id": 1, "parent_id": 0},
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
+				{ID: 1, ParentID: 0, Title: "Duplicate"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "Invalid parent reference",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 2},
+			data: []TestCategory{
+				{ID: 1, ParentID: 2, Title: "Invalid"},
 			},
 			wantErr: true,
 		},
 		{
 			name: "Circular reference",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 2},
-				{"id": 2, "parent_id": 1},
+			data: []TestCategory{
+				{ID: 1, ParentID: 2, Title: "Node 1"},
+				{ID: 2, ParentID: 1, Title: "Node 2"},
 			},
 			wantErr: true,
 		},
@@ -84,7 +91,10 @@ func TestLoad(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tree.Load(tt.data)
+			err := tree.Load(tt.data,
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -93,87 +103,161 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadDataFormat(t *testing.T) {
-	tree := New()
 	tests := []struct {
 		name    string
-		data    []map[string]interface{}
+		data    []TestCategory
+		options []LoadOption[TestCategory]
 		wantErr string
 	}{
 		{
-			name:    "Empty data",
-			data:    []map[string]interface{}{},
-			wantErr: "empty data",
-		},
-		{
-			name: "Missing id field",
-			data: []map[string]interface{}{
-				{"parent_id": 0},
+			name: "Empty data",
+			data: []TestCategory{},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
 			},
-			wantErr: "missing required field 'id'",
+			wantErr: "invalid data: empty data",
 		},
 		{
-			name: "Missing parent_id field",
-			data: []map[string]interface{}{
-				{"id": 1},
+			name: "Missing ID func",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
 			},
-			wantErr: "missing required field 'parent_id'",
-		},
-		{
-			name: "Invalid id type",
-			data: []map[string]interface{}{
-				{"id": "1", "parent_id": 0},
+			options: []LoadOption[TestCategory]{
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
 			},
-			wantErr: "field 'id' must be an integer",
+			wantErr: "id function is required",
 		},
 		{
-			name: "Invalid parent_id type",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": "0"},
+			name: "Missing ParentID func",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
 			},
-			wantErr: "field 'parent_id' must be an integer",
-		},
-		{
-			name: "Zero id",
-			data: []map[string]interface{}{
-				{"id": 0, "parent_id": 0},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
 			},
-			wantErr: "field 'id' must be positive",
+			wantErr: "parent id function is required",
 		},
 		{
-			name: "Negative id",
-			data: []map[string]interface{}{
-				{"id": -1, "parent_id": 0},
+			name: "Zero ID",
+			data: []TestCategory{
+				{ID: 0, ParentID: 0, Title: "Invalid"},
 			},
-			wantErr: "field 'id' must be positive",
-		},
-		{
-			name: "Negative parent_id",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": -1},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
 			},
-			wantErr: "field 'parent_id' cannot be negative",
+			wantErr: "invalid data: item 0: ID must be positive",
 		},
 		{
-			name: "Valid root node",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 0, "title": "Root"},
+			name: "Negative ID",
+			data: []TestCategory{
+				{ID: -1, ParentID: 0, Title: "Invalid"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			wantErr: "invalid data: item 0: ID must be positive",
+		},
+		{
+			name: "Negative ParentID",
+			data: []TestCategory{
+				{ID: 1, ParentID: -1, Title: "Invalid"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			wantErr: "invalid data: item 0: parent ID cannot be negative",
+		},
+		{
+			name: "Duplicate IDs",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
+				{ID: 1, ParentID: 0, Title: "Duplicate"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			wantErr: "invalid data: duplicate node ID: 1",
+		},
+		{
+			name: "Invalid parent reference",
+			data: []TestCategory{
+				{ID: 1, ParentID: 2, Title: "Invalid"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			wantErr: "invalid parent ID 2 for node 1",
+		},
+		{
+			name: "Circular reference",
+			data: []TestCategory{
+				{ID: 1, ParentID: 2, Title: "Node 1"},
+				{ID: 2, ParentID: 1, Title: "Node 2"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			//wantErr: "circular reference detected at node 1",
+			wantErr: "circular reference detected",
+		},
+		{
+			name: "Valid single root",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
+				{ID: 2, ParentID: 1, Title: "Child"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "",
 		},
 		{
-			name: "Valid multi-level tree",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 0, "title": "Root"},
-				{"id": 2, "parent_id": 1, "title": "Child"},
-				{"id": 3, "parent_id": 0, "title": "Another Root"},
+			name: "Valid multiple roots",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root 1"},
+				{ID: 2, ParentID: 0, Title: "Root 2"},
+				{ID: 3, ParentID: 1, Title: "Child 1"},
+				{ID: 4, ParentID: 2, Title: "Child 2"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "",
 		},
 		{
-			name: "Multiple root nodes",
-			data: []map[string]interface{}{
-				{"id": 1, "parent_id": 0, "title": "Root 1"},
-				{"id": 2, "parent_id": 0, "title": "Root 2"},
+			name: "Valid deep tree",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
+				{ID: 2, ParentID: 1, Title: "Level 1"},
+				{ID: 3, ParentID: 2, Title: "Level 2"},
+				{ID: 4, ParentID: 3, Title: "Level 3"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+			},
+			wantErr: "",
+		},
+		{
+			name: "Custom sort function",
+			data: []TestCategory{
+				{ID: 1, ParentID: 0, Title: "Root"},
+				{ID: 2, ParentID: 1, Title: "B"},
+				{ID: 3, ParentID: 1, Title: "A"},
+			},
+			options: []LoadOption[TestCategory]{
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithSort[TestCategory](func(a, b TestCategory) bool { return a.Title < b.Title }),
 			},
 			wantErr: "",
 		},
@@ -181,16 +265,55 @@ func TestLoadDataFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tree.Load(tt.data)
+			tree := New[TestCategory]()
+			err := tree.Load(tt.data, tt.options...)
+
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
 				}
+
+				// 对于有效数据，进行额外验证
+				if err == nil {
+					// 验证节点数量
+					expectedCount := len(tt.data)
+					actualCount := len(tree.nodes)
+					if actualCount != expectedCount {
+						t.Errorf("Load() node count = %d, want %d", actualCount, expectedCount)
+					}
+
+					// 验证树结构
+					for _, item := range tt.data {
+						node, exists := tree.FindNode(item.ID)
+						if !exists {
+							t.Errorf("Load() node %d not found", item.ID)
+							continue
+						}
+						if node.ParentID != item.ParentID {
+							t.Errorf("Load() node %d parent = %d, want %d",
+								item.ID, node.ParentID, item.ParentID)
+						}
+						if node.Data.Title != item.Title {
+							t.Errorf("Load() node %d title = %s, want %s",
+								item.ID, node.Data.Title, item.Title)
+						}
+					}
+				}
 			} else {
 				if err == nil {
 					t.Errorf("Load() expected error containing %q, got nil", tt.wantErr)
-				} else if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("Load() error = %v, want error containing %q", err, tt.wantErr)
+				} else if err.Error() != tt.wantErr { // 改为精确匹配
+					// 对于循环引用的特殊处理
+					if tt.name == "Circular reference" {
+						if !strings.Contains(err.Error(), "circular reference detected at node 1") &&
+							!strings.Contains(err.Error(), "circular reference detected at node 2") {
+							t.Errorf("Load() error = %v, want error containing %q at either node 1 or 2",
+								err, tt.wantErr)
+						}
+					} else {
+						t.Errorf("Load() error = %v, want error containing %q", err, tt.wantErr)
+					}
+					//t.Errorf("Load() error = %v, want %q", err, tt.wantErr)
 				}
 			}
 		})
@@ -198,165 +321,469 @@ func TestLoadDataFormat(t *testing.T) {
 }
 
 func TestTreeOperations(t *testing.T) {
-	tree := New()
-	err := tree.Load(getTestData())
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
 	}
 
 	t.Run("FindNode", func(t *testing.T) {
-		node, exists := tree.FindNode(2)
-		if !exists {
-			t.Error("Node 2 not found")
+		tests := []struct {
+			name     string
+			id       int
+			want     TestCategory
+			wantBool bool
+		}{
+			{
+				name:     "Existing node",
+				id:       2,
+				want:     TestCategory{ID: 2, ParentID: 1, Title: "Child 1"},
+				wantBool: true,
+			},
+			{
+				name:     "Non-existent node",
+				id:       999,
+				wantBool: false,
+			},
+			{
+				name:     "Root node",
+				id:       1,
+				want:     TestCategory{ID: 1, ParentID: 0, Title: "Root"},
+				wantBool: true,
+			},
 		}
-		if node.ID != 2 || node.ParentID != 1 || node.Data["title"] != "Child 1" {
-			t.Errorf("Node data mismatch: got ID=%d, ParentID=%d, Title=%s",
-				node.ID, node.ParentID, node.Data["title"])
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				node, exists := tree.FindNode(tt.id)
+				if exists != tt.wantBool {
+					t.Errorf("FindNode() exists = %v, want %v", exists, tt.wantBool)
+					return
+				}
+				if exists {
+					if node.ID != tt.want.ID || node.ParentID != tt.want.ParentID || node.Data.Title != tt.want.Title {
+						t.Errorf("FindNode() = %+v, want %+v", node.Data, tt.want)
+					}
+				}
+			})
 		}
 	})
 
 	t.Run("GetChildren", func(t *testing.T) {
-		children := tree.GetChildren(1)
-		expected := []struct {
-			id       int
+		tests := []struct {
+			name     string
 			parentID int
-			title    string
+			want     []TestCategory
 		}{
-			{2, 1, "Child 1"},
-			{3, 1, "Child 2"},
+			{
+				name:     "Root children",
+				parentID: 1,
+				want: []TestCategory{
+					{ID: 2, ParentID: 1, Title: "Child 1"},
+					{ID: 3, ParentID: 1, Title: "Child 2"},
+				},
+			},
+			{
+				name:     "Leaf node",
+				parentID: 4,
+				want:     []TestCategory{},
+			},
+			{
+				name:     "Mid-level node",
+				parentID: 2,
+				want: []TestCategory{
+					{ID: 4, ParentID: 2, Title: "Child 1.1"},
+					{ID: 5, ParentID: 2, Title: "Child 1.2"},
+					{ID: 17, ParentID: 2, Title: "Child 1.3"},
+				},
+			},
 		}
 
-		if len(children) != len(expected) {
-			t.Errorf("Expected %d children, got %d", len(expected), len(children))
-			return
-		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				children := tree.GetChildren(tt.parentID)
+				if len(children) != len(tt.want) {
+					t.Errorf("GetChildren() got %d children, want %d", len(children), len(tt.want))
+					return
+				}
 
-		for i, child := range children {
-			if child.ID != expected[i].id ||
-				child.ParentID != expected[i].parentID ||
-				child.Data["title"] != expected[i].title {
-				t.Errorf("Child %d mismatch: got {ID:%d, ParentID:%d, Title:%s}, want {ID:%d, ParentID:%d, Title:%s}",
-					i, child.ID, child.ParentID, child.Data["title"],
-					expected[i].id, expected[i].parentID, expected[i].title)
-			}
+				for i, child := range children {
+					if child.ID != tt.want[i].ID ||
+						child.ParentID != tt.want[i].ParentID ||
+						child.Data.Title != tt.want[i].Title {
+						t.Errorf("Child[%d] = %+v, want %+v", i, child.Data, tt.want[i])
+					}
+				}
+			})
 		}
 	})
 
-	t.Run("GetParent", func(t *testing.T) {
-		parent, exists := tree.GetParent(4) // Testing parent of "Child 1.1"
-		if !exists {
-			t.Error("Parent not found")
-		}
-		if parent.ID != 2 || parent.ParentID != 1 || parent.Data["title"] != "Child 1" {
-			t.Errorf("Parent mismatch: got {ID:%d, ParentID:%d, Title:%s}, want {ID:2, ParentID:1, Title:Child 1}",
-				parent.ID, parent.ParentID, parent.Data["title"])
+	t.Run("ValidateDataLoading", func(t *testing.T) {
+		for _, expected := range getTestData() {
+			node, exists := tree.FindNode(expected.ID)
+			if !exists {
+				t.Errorf("Node %d not found after loading", expected.ID)
+				continue
+			}
+			if node.Data.Title != expected.Title || node.ParentID != expected.ParentID {
+				t.Errorf("Node %d data mismatch: got {Title:%s, ParentID:%d}, want {Title:%s, ParentID:%d}",
+					expected.ID, node.Data.Title, node.ParentID, expected.Title, expected.ParentID)
+			}
 		}
 	})
 
 	t.Run("GetDescendants", func(t *testing.T) {
-		descendants := tree.GetDescendants(1, 3)
-		expected := []struct {
-			id    int
-			title string
+		tests := []struct {
+			name     string
+			nodeID   int
+			maxDepth int
+			want     []TestCategory
 		}{
-			{2, "Child 1"},
-			{3, "Child 2"},
-			{4, "Child 1.1"},
-			{5, "Child 1.2"},
-			{17, "Child 1.3"},
-			{7, "Child 1.2.1"},
-			{8, "Child 1.2.2"},
-			{6, "Child 2.1"},
+			{
+				name:     "Three levels deep",
+				nodeID:   1,
+				maxDepth: 3,
+				want: []TestCategory{
+					{ID: 2, ParentID: 1, Title: "Child 1"},
+					{ID: 3, ParentID: 1, Title: "Child 2"},
+					{ID: 4, ParentID: 2, Title: "Child 1.1"},
+					{ID: 5, ParentID: 2, Title: "Child 1.2"},
+					{ID: 17, ParentID: 2, Title: "Child 1.3"},
+					{ID: 7, ParentID: 5, Title: "Child 1.2.1"},
+					{ID: 8, ParentID: 5, Title: "Child 1.2.2"},
+					{ID: 6, ParentID: 3, Title: "Child 2.1"},
+				},
+			},
+			{
+				name:     "One level deep",
+				nodeID:   2,
+				maxDepth: 1,
+				want: []TestCategory{
+					{ID: 4, ParentID: 2, Title: "Child 1.1"},
+					{ID: 5, ParentID: 2, Title: "Child 1.2"},
+					{ID: 17, ParentID: 2, Title: "Child 1.3"},
+				},
+			},
+			{
+				name:     "Unlimited depth",
+				nodeID:   5, // Child 1.2
+				maxDepth: 0,
+				want: []TestCategory{
+					{ID: 7, ParentID: 5, Title: "Child 1.2.1"},
+					{ID: 8, ParentID: 5, Title: "Child 1.2.2"},
+					{ID: 9, ParentID: 8, Title: "Child 1.2.2.1"},
+					{ID: 10, ParentID: 8, Title: "Child 1.2.2.2"},
+					{ID: 11, ParentID: 10, Title: "Child 1.2.2.2.1"},
+					{ID: 12, ParentID: 10, Title: "Child 1.2.2.2.2"},
+					{ID: 13, ParentID: 12, Title: "Child 1.2.2.2.2.1"},
+					{ID: 14, ParentID: 12, Title: "Child 1.2.2.2.2.2"},
+					{ID: 15, ParentID: 14, Title: "Child 1.2.2.2.2.2.1"},
+					{ID: 16, ParentID: 14, Title: "Child 1.2.2.2.2.2.2"},
+				},
+			},
+			{
+				name:     "Negative depth",
+				nodeID:   5,
+				maxDepth: -1,
+				want:     []TestCategory{}, // 应该返回空结果
+			},
+			{
+				name:     "Non-existent node",
+				nodeID:   999,
+				maxDepth: 1,
+				want:     []TestCategory{}, // 应该返回空结果
+			},
+			{
+				name:     "Leaf node",
+				nodeID:   15, // Child 1.2.2.2.2.2.1 是叶子节点
+				maxDepth: 1,
+				want:     []TestCategory{}, // 应该返回空结果，因为没有子节点
+			},
 		}
 
-		t.Logf("descendants: %+v", descendants)
-		for _, node := range descendants {
-			t.Logf("node: %+v", node)
-		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				descendants := tree.GetDescendants(tt.nodeID, tt.maxDepth)
 
-		if len(descendants) != len(expected) {
-			t.Errorf("Expected %d descendants, got %d", len(expected), len(descendants))
-			return
-		}
+				if len(descendants) != len(tt.want) {
+					t.Errorf("GetDescendants() got %d nodes, want %d", len(descendants), len(tt.want))
+					t.Logf("Got nodes:")
+					for _, node := range descendants {
+						t.Logf("  ID: %d, ParentID: %d, Title: %s",
+							node.ID, node.ParentID, node.Data.Title)
+					}
+					t.Logf("Want nodes:")
+					for _, node := range tt.want {
+						t.Logf("  ID: %d, ParentID: %d, Title: %s",
+							node.ID, node.ParentID, node.Title)
+					}
+					return
+				}
 
-		for i, node := range descendants {
-			if node.ID != expected[i].id || node.Data["title"] != expected[i].title {
-				t.Errorf("Descendant %d mismatch: got {ID:%d, Title:%s}, want {ID:%d, Title:%s}",
-					i, node.ID, node.Data["title"], expected[i].id, expected[i].title)
-			}
+				// 只有当结果不为空时才进行详细比较
+				if len(descendants) > 0 {
+					// 创建 map 来比较结果，因为顺序可能不同
+					wantMap := make(map[int]TestCategory)
+					for _, w := range tt.want {
+						wantMap[w.ID] = w
+					}
+
+					for _, got := range descendants {
+						want, exists := wantMap[got.ID]
+						if !exists {
+							t.Errorf("Unexpected node in result: ID=%d, Title=%s",
+								got.ID, got.Data.Title)
+							continue
+						}
+						if got.ParentID != want.ParentID || got.Data.Title != want.Title {
+							t.Errorf("Node %d mismatch:\ngot:  ParentID=%d, Title=%s\nwant: ParentID=%d, Title=%s",
+								got.ID, got.ParentID, got.Data.Title, want.ParentID, want.Title)
+						}
+					}
+				}
+
+				// 创建 map 来比较结果，因为顺序可能不同
+				wantMap := make(map[int]TestCategory)
+				for _, w := range tt.want {
+					wantMap[w.ID] = w
+				}
+
+				for _, got := range descendants {
+					want, exists := wantMap[got.ID]
+					if !exists {
+						t.Errorf("Unexpected node in result: ID=%d, Title=%s",
+							got.ID, got.Data.Title)
+						continue
+					}
+					if got.ParentID != want.ParentID || got.Data.Title != want.Title {
+						t.Errorf("Node %d mismatch:\ngot:  ParentID=%d, Title=%s\nwant: ParentID=%d, Title=%s",
+							got.ID, got.ParentID, got.Data.Title, want.ParentID, want.Title)
+					}
+				}
+			})
 		}
 	})
 
 	t.Run("GetAncestors", func(t *testing.T) {
-		// Testing ancestors of "Child 1.1" (ID: 4)
-		ancestors := tree.GetAncestors(4, false)
-		expected := []struct {
-			id    int
-			title string
+		tests := []struct {
+			name        string
+			nodeID      int
+			includeSelf bool
+			want        []TestCategory
 		}{
-			{2, "Child 1"},
-			{1, "Root"},
+			{
+				name:        "Deep node with self",
+				nodeID:      15, // Child 1.2.2.2.2.2.1
+				includeSelf: true,
+				want: []TestCategory{
+					{ID: 15, ParentID: 14, Title: "Child 1.2.2.2.2.2.1"},
+					{ID: 14, ParentID: 12, Title: "Child 1.2.2.2.2.2"},
+					{ID: 12, ParentID: 10, Title: "Child 1.2.2.2.2"},
+					{ID: 10, ParentID: 8, Title: "Child 1.2.2.2"},
+					{ID: 8, ParentID: 5, Title: "Child 1.2.2"},
+					{ID: 5, ParentID: 2, Title: "Child 1.2"},
+					{ID: 2, ParentID: 1, Title: "Child 1"},
+					{ID: 1, ParentID: 0, Title: "Root"},
+				},
+			},
+			{
+				name:        "Mid-level node without self",
+				nodeID:      5, // Child 1.2
+				includeSelf: false,
+				want: []TestCategory{
+					{ID: 2, ParentID: 1, Title: "Child 1"},
+					{ID: 1, ParentID: 0, Title: "Root"},
+				},
+			},
+			{
+				name:        "Root node with self",
+				nodeID:      1,
+				includeSelf: true,
+				want: []TestCategory{
+					{ID: 1, ParentID: 0, Title: "Root"},
+				},
+			},
+			{
+				name:        "Root node without self",
+				nodeID:      1,
+				includeSelf: false,
+				want:        []TestCategory{},
+			},
 		}
 
-		if len(ancestors) != len(expected) {
-			t.Errorf("Expected %d ancestors, got %d", len(expected), len(ancestors))
-			return
-		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ancestors := tree.GetAncestors(tt.nodeID, tt.includeSelf)
+				if len(ancestors) != len(tt.want) {
+					t.Errorf("GetAncestors() got %d nodes, want %d", len(ancestors), len(tt.want))
+					return
+				}
 
-		for i, node := range ancestors {
-			if node.ID != expected[i].id || node.Data["title"] != expected[i].title {
-				t.Errorf("Ancestor %d mismatch: got {ID:%d, Title:%s}, want {ID:%d, Title:%s}",
-					i, node.ID, node.Data["title"], expected[i].id, expected[i].title)
-			}
+				for i, node := range ancestors {
+					if node.ID != tt.want[i].ID ||
+						node.ParentID != tt.want[i].ParentID ||
+						node.Data.Title != tt.want[i].Title {
+						t.Errorf("Ancestor[%d] = %+v, want %+v", i, node.Data, tt.want[i])
+					}
+				}
+			})
 		}
 	})
 
 	t.Run("ToTree", func(t *testing.T) {
-		root := tree.ToTree(1)
-		if root == nil {
-			t.Error("ToTree returned nil")
-			return
-		}
-
-		// Verify root node
-		if root.ID != 1 || root.Data["title"] != "Root" {
-			t.Errorf("Root mismatch: got {ID:%d, Title:%s}, want {ID:1, Title:Root}",
-				root.ID, root.Data["title"])
-		}
-
-		// Verify first level children
-		if len(root.Children) != 2 {
-			t.Errorf("Expected 2 children in tree, got %d", len(root.Children))
-			return
-		}
-
-		expectedChildren := []struct {
-			id    int
-			title string
+		tests := []struct {
+			name    string
+			rootID  int
+			wantErr bool
+			check   func(*testing.T, *Node[TestCategory])
 		}{
-			{2, "Child 1"},
-			{3, "Child 2"},
+			{
+				name:    "Full tree from root",
+				rootID:  1,
+				wantErr: false,
+				check: func(t *testing.T, root *Node[TestCategory]) {
+					if root == nil {
+						t.Fatal("Expected non-nil root")
+					}
+					// 检查根节点
+					if root.ID != 1 || root.Data.Title != "Root" {
+						t.Errorf("Root = %+v, want ID:1, Title:Root", root.Data)
+					}
+					// 检查第一层子节点
+					if len(root.Children) != 2 {
+						t.Errorf("Root has %d children, want 2", len(root.Children))
+						return
+					}
+					// 检查特定路径
+					child1 := root.Children[0]
+					if child1.ID != 2 || child1.Data.Title != "Child 1" {
+						t.Errorf("First child = %+v, want ID:2, Title:Child 1", child1.Data)
+					}
+					// 检查深层节点
+					if len(child1.Children) > 0 {
+						child1_2 := findChildByID(child1.Children, 5)
+						if child1_2 == nil {
+							t.Error("Could not find Child 1.2")
+							return
+						}
+						if child1_2.Data.Title != "Child 1.2" {
+							t.Errorf("Child 1.2 = %+v, want Title:Child 1.2", child1_2.Data)
+						}
+					}
+				},
+			},
+			{
+				name:    "Subtree from mid-level",
+				rootID:  5, // Child 1.2
+				wantErr: false,
+				check: func(t *testing.T, root *Node[TestCategory]) {
+					if root == nil {
+						t.Fatal("Expected non-nil root")
+					}
+					if root.ID != 5 || root.Data.Title != "Child 1.2" {
+						t.Errorf("Root = %+v, want ID:5, Title:Child 1.2", root.Data)
+					}
+					// 检查子节点
+					expectedChildren := []struct {
+						id    int
+						title string
+					}{
+						{7, "Child 1.2.1"},
+						{8, "Child 1.2.2"},
+					}
+					if len(root.Children) != len(expectedChildren) {
+						t.Errorf("Got %d children, want %d", len(root.Children), len(expectedChildren))
+						return
+					}
+					for i, want := range expectedChildren {
+						if root.Children[i].ID != want.id || root.Children[i].Data.Title != want.title {
+							t.Errorf("Child[%d] = %+v, want ID:%d, Title:%s",
+								i, root.Children[i].Data, want.id, want.title)
+						}
+					}
+				},
+			},
+			{
+				name:    "Leaf node",
+				rootID:  15, // Child 1.2.2.2.2.2.1
+				wantErr: false,
+				check: func(t *testing.T, root *Node[TestCategory]) {
+					if root == nil {
+						t.Fatal("Expected non-nil root")
+					}
+					if root.ID != 15 || root.Data.Title != "Child 1.2.2.2.2.2.1" {
+						t.Errorf("Root = %+v, want ID:15, Title:Child 1.2.2.2.2.2.1", root.Data)
+					}
+					if len(root.Children) != 0 {
+						t.Errorf("Leaf node has %d children, want 0", len(root.Children))
+					}
+				},
+			},
+			{
+				name:    "Non-existent node",
+				rootID:  999,
+				wantErr: true,
+				check: func(t *testing.T, root *Node[TestCategory]) {
+					if root != nil {
+						t.Error("Expected nil root for non-existent node")
+					}
+				},
+			},
 		}
 
-		for i, child := range root.Children {
-			if child.ID != expectedChildren[i].id ||
-				child.Data["title"] != expectedChildren[i].title {
-				t.Errorf("Child %d mismatch: got {ID:%d, Title:%s}, want {ID:%d, Title:%s}",
-					i, child.ID, child.Data["title"],
-					expectedChildren[i].id, expectedChildren[i].title)
-			}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				root := tree.ToTree(tt.rootID)
+				if tt.check != nil {
+					tt.check(t, root)
+				}
+			})
 		}
 	})
 }
 
+// 辅助函数：通过ID查找子节点
+func findChildByID[T any](children []*Node[T], id int) *Node[T] {
+	for _, child := range children {
+		if child.ID == id {
+			return child
+		}
+	}
+	return nil
+}
+
+// 辅助函数：打印树结构
+func printTreeStructure(t *testing.T, tree *Tree[TestCategory], nodeID int, level int) {
+	node, exists := tree.FindNode(nodeID)
+	if !exists {
+		return
+	}
+
+	indent := strings.Repeat("  ", level)
+	t.Logf("%sNode: ID=%d, Title=%s", indent, node.ID, node.Data.Title)
+
+	children := tree.GetChildren(nodeID)
+	for _, child := range children {
+		printTreeStructure(t, tree, child.ID, level+1)
+	}
+}
+
 func TestFormatTreeDisplay(t *testing.T) {
-	tree := New()
-	err := tree.Load(getTestData())
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
 	}
 
-	formatted := tree.FormatTreeDisplay(0, "title", "", nil)
+	opt := DefaultFormatOption()
+	opt.DisplayField = "Title"
+	formatted := tree.FormatTreeDisplay(1, opt)
 
 	// 定义预期的显示结果
 	expected := []struct {
@@ -385,7 +812,7 @@ func TestFormatTreeDisplay(t *testing.T) {
 	// 打印实际结果（用于调试）
 	t.Log("Actual formatted tree:")
 	for _, node := range formatted {
-		t.Logf("ID: %d, Display: %s", node.ID, node.DisplayName)
+		t.Logf("ID: %d, Display: %s", node.Node.ID, node.DisplayName)
 	}
 
 	if len(formatted) != len(expected) {
@@ -394,16 +821,19 @@ func TestFormatTreeDisplay(t *testing.T) {
 	}
 
 	for i, exp := range expected {
-		if formatted[i].ID != exp.id || formatted[i].DisplayName != exp.displayName {
+		if formatted[i].Node.ID != exp.id || formatted[i].DisplayName != exp.displayName {
 			t.Errorf("Node %d mismatch:\nexpected {ID: %d, Display: %q}\ngot      {ID: %d, Display: %q}",
-				i, exp.id, exp.displayName, formatted[i].ID, formatted[i].DisplayName)
+				i, exp.id, exp.displayName, formatted[i].Node.ID, formatted[i].DisplayName)
 		}
 	}
 }
 
 func TestConcurrency(t *testing.T) {
-	tree := New()
-	err := tree.Load(getTestData())
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
 	}
@@ -411,7 +841,7 @@ func TestConcurrency(t *testing.T) {
 	var wg sync.WaitGroup
 	numGoroutines := 100
 
-	// Test concurrent reads
+	// 测试并发读取
 	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -419,6 +849,7 @@ func TestConcurrency(t *testing.T) {
 			tree.GetChildren(1)
 			tree.GetDescendants(1, 2)
 			tree.GetAncestors(4, false)
+			tree.FindNode(2)
 		}()
 	}
 	wg.Wait()
@@ -426,21 +857,22 @@ func TestConcurrency(t *testing.T) {
 	// Test concurrent cache operations
 	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
-		go func(i int) {
+		go func() {
 			defer wg.Done()
-			if i%2 == 0 {
-				tree.ClearCache()
-			} else {
-				tree.GetChildren(1)
-			}
-		}(i)
+			opt := DefaultFormatOption()
+			opt.DisplayField = "Title"
+			tree.FormatTreeDisplay(1, opt)
+		}()
 	}
 	wg.Wait()
 }
 
 func TestEdgeCases(t *testing.T) {
-	tree := New()
-	err := tree.Load(getTestData())
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
 	}
@@ -475,110 +907,317 @@ func TestEdgeCases(t *testing.T) {
 }
 
 func ExampleTree() {
-	// Create a new tree
-	tree := New()
+	// 创建新树
+	tree := New[TestCategory]()
 
-	// Load sample data
-	data := []map[string]interface{}{
-		{"id": 1, "parent_id": 0, "title": "Root"},
-		{"id": 2, "parent_id": 1, "title": "Child"},
+	// 准备示例数据
+	data := []TestCategory{
+		{ID: 1, ParentID: 0, Title: "Root"},
+		{ID: 2, ParentID: 1, Title: "Child 1"},
+		{ID: 3, ParentID: 1, Title: "Child 2"},
 	}
 
-	err := tree.Load(data)
+	// 加载数据
+	err := tree.Load(data,
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
 	if err != nil {
 		fmt.Printf("Error loading data: %v\n", err)
 		return
 	}
 
-	// Get and print children of root
-	children := tree.GetChildren(1)
-	for _, child := range children {
-		fmt.Printf("Child ID: %d, Title: %s\n", child.ID, child.Data["title"])
+	// 格式化显示
+	opt := DefaultFormatOption()
+	opt.DisplayField = "Title"
+	formatted := tree.FormatTreeDisplay(1, opt)
+	for _, node := range formatted {
+		fmt.Println(node.DisplayName)
 	}
+
+	// Output:
+	// Root
+	//  ├ Child 1
+	//  └ Child 2
 }
 
 func TestCustomSort(t *testing.T) {
-	tree := New()
-	data := []map[string]interface{}{
-		{"id": 1, "parent_id": 0, "title": "Root", "sort": 1},
-		{"id": 2, "parent_id": 1, "title": "B", "sort": 3},
-		{"id": 3, "parent_id": 1, "title": "A", "sort": 2},
-		{"id": 4, "parent_id": 1, "title": "C", "sort": 1},
-	}
-
-	err := tree.Load(data)
-	if err != nil {
-		t.Fatalf("Failed to load test data: %v", err)
+	tree := New[TestCategory]()
+	data := []TestCategory{
+		{ID: 1, ParentID: 0, Title: "Root", Sort: 1},
+		{ID: 2, ParentID: 1, Title: "B", Sort: 3},
+		{ID: 3, ParentID: 1, Title: "A", Sort: 2},
+		{ID: 4, ParentID: 1, Title: "C", Sort: 1},
 	}
 
 	tests := []struct {
 		name      string
-		sortField string
-		ascending bool
-		wantIDs   []int
+		sortFunc  func(a, b TestCategory) bool
+		wantOrder []string
 	}{
 		{
-			name:      "Sort by ID ascending",
-			sortField: "id",
-			ascending: true,
-			wantIDs:   []int{2, 3, 4},
+			name: "Sort by Title ascending",
+			sortFunc: func(a, b TestCategory) bool {
+				return a.Title < b.Title
+			},
+			wantOrder: []string{"A", "B", "C"},
 		},
 		{
-			name:      "Sort by title ascending",
-			sortField: "title",
-			ascending: true,
-			wantIDs:   []int{3, 2, 4}, // A, B, C
+			name: "Sort by Sort field ascending",
+			sortFunc: func(a, b TestCategory) bool {
+				return a.Sort < b.Sort
+			},
+			wantOrder: []string{"C", "A", "B"},
 		},
 		{
-			name:      "Sort by sort field ascending",
-			sortField: "sort",
-			ascending: true,
-			wantIDs:   []int{4, 3, 2}, // 1, 2, 3
-		},
-		{
-			name:      "Sort by sort field descending",
-			sortField: "sort",
-			ascending: false,
-			wantIDs:   []int{2, 3, 4}, // 3, 2, 1
+			name: "Sort by ID descending",
+			sortFunc: func(a, b TestCategory) bool {
+				return a.ID > b.ID
+			},
+			wantOrder: []string{"C", "A", "B"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tree.SetSort(tt.sortField, tt.ascending)
-			children := tree.GetChildren(1)
+			err := tree.Load(data,
+				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithSort[TestCategory](tt.sortFunc),
+			)
+			if err != nil {
+				t.Fatalf("Failed to load test data: %v", err)
+			}
 
-			if len(children) != len(tt.wantIDs) {
-				t.Errorf("got %d children, want %d", len(children), len(tt.wantIDs))
+			children := tree.GetChildren(1)
+			if len(children) != len(tt.wantOrder) {
+				t.Errorf("got %d children, want %d", len(children), len(tt.wantOrder))
 				return
 			}
 
 			for i, node := range children {
-				if node.ID != tt.wantIDs[i] {
-					t.Errorf("position %d: got ID %d, want ID %d", i, node.ID, tt.wantIDs[i])
+				if node.Data.Title != tt.wantOrder[i] {
+					t.Errorf("position %d: got Title %s, want Title %s",
+						i, node.Data.Title, tt.wantOrder[i])
 				}
 			}
 		})
 	}
+}
 
-	// 添加空值排序测试
-	t.Run("NullValueSort", func(t *testing.T) {
-		data := []map[string]interface{}{
-			{"id": 1, "parent_id": 0, "title": "Root"},
-			{"id": 2, "parent_id": 1, "title": "B", "sort": 1},
-			{"id": 3, "parent_id": 1, "title": "A"}, // 没有 sort 字段
+func TestTreeTraversal(t *testing.T) {
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
+	if err != nil {
+		t.Fatalf("Failed to load test data: %v", err)
+	}
+
+	t.Run("GetOne", func(t *testing.T) {
+		// 测试查找特定标题的节点
+		node := tree.GetOne(func(c TestCategory) bool {
+			return c.Title == "Child 1.2.2"
+		})
+		if node == nil {
+			t.Fatal("Expected to find node with title 'Child 1.2.2'")
 		}
-		// 测试处理空值的排序逻辑
-		err := tree.Load(data)
-		if err != nil {
-			t.Fatalf("Failed to load test data: %v", err)
+		if node.ID != 8 {
+			t.Errorf("Expected node ID 8, got %d", node.ID)
 		}
-		children := tree.GetChildren(1)
-		if len(children) != 2 {
-			t.Errorf("Expected 2 children, got %d", len(children))
+
+		// 测试查找不存在的节点
+		node = tree.GetOne(func(c TestCategory) bool {
+			return c.Title == "NonExistent"
+		})
+		if node != nil {
+			t.Error("Expected nil for non-existent node")
 		}
-		if children[0].ID != 2 || children[1].ID != 3 {
-			t.Errorf("Unexpected children order: %v", children)
+	})
+
+	t.Run("GetAll", func(t *testing.T) {
+		// 测试查找所有包含特定字符串的节点
+		nodes := tree.GetAll(func(c TestCategory) bool {
+			return strings.Contains(c.Title, "1.2")
+		})
+		expectedCount := 11
+		if len(nodes) != expectedCount {
+			t.Errorf("Expected %d nodes, got %d", expectedCount, len(nodes))
+		}
+
+		// 测试查找特定层级的节点
+		nodes = tree.GetAll(func(c TestCategory) bool {
+			return c.ParentID == 1
+		})
+		if len(nodes) != 2 { // Child 1, Child 2
+			t.Errorf("Expected 2 first-level nodes, got %d", len(nodes))
+		}
+	})
+}
+
+func TestTreeDepth(t *testing.T) {
+	tree := New[TestCategory]()
+	data := []TestCategory{
+		{ID: 1, ParentID: 0, Title: "Root"},
+		{ID: 2, ParentID: 1, Title: "Level 1"},
+		{ID: 3, ParentID: 2, Title: "Level 2"},
+		{ID: 4, ParentID: 3, Title: "Level 3"},
+	}
+
+	err := tree.Load(data,
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
+	if err != nil {
+		t.Fatalf("Failed to load test data: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		nodeID   int
+		maxDepth int
+		wantLen  int
+	}{
+		{"Root full depth", 1, 0, 3},   // 所有后代
+		{"Root depth 1", 1, 1, 1},      // 只有直接子节点
+		{"Root depth 2", 1, 2, 2},      // 两层子节点
+		{"Mid-level full", 2, 0, 2},    // 从中间节点开始的所有后代
+		{"Mid-level depth 1", 2, 1, 1}, // 从中间节点开始的一层
+		{"Leaf node", 4, 0, 0},         // 叶子节点没有后代
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			descendants := tree.GetDescendants(tt.nodeID, tt.maxDepth)
+			if len(descendants) != tt.wantLen {
+				t.Errorf("GetDescendants(%d, %d) got %d nodes, want %d",
+					tt.nodeID, tt.maxDepth, len(descendants), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestSiblings(t *testing.T) {
+	tree := New[TestCategory]()
+	data := []TestCategory{
+		{ID: 1, ParentID: 0, Title: "Root"},
+		{ID: 2, ParentID: 1, Title: "Child 1"},
+		{ID: 3, ParentID: 1, Title: "Child 2"},
+		{ID: 4, ParentID: 1, Title: "Child 3"},
+		{ID: 5, ParentID: 2, Title: "Grandchild 1"},
+	}
+
+	err := tree.Load(data,
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
+	if err != nil {
+		t.Fatalf("Failed to load test data: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		nodeID      int
+		includeSelf bool
+		wantLen     int
+		wantIDs     []int
+	}{
+		{
+			name:        "With self",
+			nodeID:      2,
+			includeSelf: true,
+			wantLen:     3,
+			wantIDs:     []int{2, 3, 4},
+		},
+		{
+			name:        "Without self",
+			nodeID:      2,
+			includeSelf: false,
+			wantLen:     2,
+			wantIDs:     []int{3, 4},
+		},
+		{
+			name:        "Single child",
+			nodeID:      5,
+			includeSelf: true,
+			wantLen:     1,
+			wantIDs:     []int{5},
+		},
+		{
+			name:        "Root node",
+			nodeID:      1,
+			includeSelf: true,
+			wantLen:     1,
+			wantIDs:     []int{1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			siblings := tree.GetSiblings(tt.nodeID, tt.includeSelf)
+			if len(siblings) != tt.wantLen {
+				t.Errorf("GetSiblings(%d, %v) got %d nodes, want %d",
+					tt.nodeID, tt.includeSelf, len(siblings), tt.wantLen)
+			}
+
+			siblingIDs := make([]int, len(siblings))
+			for i, sibling := range siblings {
+				siblingIDs[i] = sibling.ID
+			}
+
+			// 检查ID是否匹配
+			if !reflect.DeepEqual(siblingIDs, tt.wantIDs) {
+				t.Errorf("GetSiblings(%d, %v) got IDs %v, want %v",
+					tt.nodeID, tt.includeSelf, siblingIDs, tt.wantIDs)
+			}
+		})
+	}
+}
+
+func BenchmarkTreeOperations(b *testing.B) {
+	// 准备大量测试数据
+	data := make([]TestCategory, 1000)
+	for i := range data {
+		data[i] = TestCategory{
+			ID:       i + 1,
+			ParentID: (i + 1) / 2, // 创建一个平衡树
+			Title:    fmt.Sprintf("Node %d", i+1),
+		}
+	}
+
+	tree := New[TestCategory]()
+	err := tree.Load(data,
+		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+	)
+	if err != nil {
+		b.Fatalf("Failed to load test data: %v", err)
+	}
+
+	b.Run("FindNode", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			tree.FindNode(500) // 查找中间的节点
+		}
+	})
+
+	b.Run("GetChildren", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			tree.GetChildren(1) // 获取根节点的子节点
+		}
+	})
+
+	b.Run("GetDescendants", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			tree.GetDescendants(1, 3) // 获取三层深度的后代
+		}
+	})
+
+	b.Run("FormatTreeDisplay", func(b *testing.B) {
+		opt := DefaultFormatOption()
+		opt.DisplayField = "Title"
+		for i := 0; i < b.N; i++ {
+			tree.FormatTreeDisplay(1, opt)
 		}
 	})
 }
