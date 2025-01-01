@@ -126,36 +126,37 @@ type FormattedNode struct {
 
 ### API Functions
 
-**Core Operations**
+**1. Core Operations**
 - `New() *Tree `: Create a new tree instance.
 - `Load(data []map[string]interface{}) error`: Initialize the tree with the provided data.
 - `SetSort(field string, ascending bool)`: Set the sorting field and direction.
 - `ClearCache()`: Clear the cache of children lists.
 
-**Query Operations**
+**2. Query Operations**
 - `FindNode(id int) (*Node, bool)`: Find a node by its ID.
 - `GetOne(key string, value interface{}) *Node`: Get the first node that matches the specified key and value.
 - `GetAll(key string, value interface{}) []*Node`: Get all nodes that match the specified key and value.
 
-**Traversal Operations**
-- Parent/Child Operations
- - `GetParent(id int) (*Node, bool)`: Get the parent node of a node by its ID.
- - `GetParentID(id int) (int, bool)`: Get the parent ID of a node by its ID.
- - `GetChildren(id int) []*Node`: Get the children of a node by its ID.
- - `GetChildrenIDs(id int) []int`: Get the children IDs of a node by its ID.
+**3. Traversal Operations**
 
-- Ancestor/Descendant Operations
- - `GetAncestors(id int, includeSelf bool) []*Node`: Get the ancestors of a node by its ID.
- - `GetAncestorsIDs(id int, includeSelf bool) []int`: Get the ancestors IDs of a node by its ID.
- - `GetAncestorIDAtDepth(id int, depth int, fromRoot bool) int`: Get the ancestor ID of a node by its ID at a given depth.
- - `GetDescendants(id int, maxDepth int) []*Node`: Get the descendants of a node by its ID up to a given depth.
- - `GetDescendantsIDs(id int, maxDepth int) []int`: Get the descendants IDs of a node by its ID up to a given depth.
+*3.1 Parent/Child Operations*
+- `GetParent(id int) (*Node, bool)`: Get the parent node of a node by its ID.
+- `GetParentID(id int) (int, bool)`: Get the parent ID of a node by its ID.
+- `GetChildren(id int) []*Node`: Get the children of a node by its ID.
+- `GetChildrenIDs(id int) []int`: Get the children IDs of a node by its ID.
 
-- Sibling Operations
- - `GetSiblings(id int, includeSelf bool) []*Node`: Get the siblings of a node by its ID.
- - `GetSiblingsIDs(id int, includeSelf bool) []int`: Get the siblings IDs of a node by its ID.
+*3.2 Ancestor/Descendant Operations*
+- `GetAncestors(id int, includeSelf bool) []*Node`: Get the ancestors of a node by its ID.
+- `GetAncestorsIDs(id int, includeSelf bool) []int`: Get the ancestors IDs of a node by its ID.
+- `GetAncestorIDAtDepth(id int, depth int, fromRoot bool) int`: Get the ancestor ID of a node by its ID at a given depth.
+- `GetDescendants(id int, maxDepth int) []*Node`: Get the descendants of a node by its ID up to a given depth.
+- `GetDescendantsIDs(id int, maxDepth int) []int`: Get the descendants IDs of a node by its ID up to a given depth.
 
-**Display Operations**
+*3.3 Sibling Operations*
+- `GetSiblings(id int, includeSelf bool) []*Node`: Get the siblings of a node by its ID.
+- `GetSiblingsIDs(id int, includeSelf bool) []int`: Get the siblings IDs of a node by its ID.
+
+**4. Display Operations**
 - `ToTree(rootID int) *Node`: Convert the tree to a hierarchical tree with the children nodes starting from the specified root ID.
 - `FormatTreeDisplay(rootID int, displayField, indent string, indentIcons []string) []FormattedNode`: Format the tree for display.
 
