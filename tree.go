@@ -442,6 +442,26 @@ func (t *Tree[T]) GetAncestorIDs(id int, includeSelf bool) []int {
 	return ancestorIDs
 }
 
+// GetNodePath returns the path of node IDs from the root to the specified node.
+// Returns IDs ordered from the root down to the node.
+//
+// Example:
+//
+//	path := tree.GetNodePath(nodeID, true)
+//	fmt.Printf("Node path: %v\n", path)
+//
+// Example return structure for node ID 4 (Child 1.1):
+//
+//	[1, 2, 4] // 1 is the root, 2 is the parent of 4
+func (t *Tree[T]) GetNodePath(id int, includeSelf bool) []int {
+	ancestors := t.GetAncestors(id, includeSelf)
+	ancestorIDs := make([]int, len(ancestors))
+	for i := len(ancestors) - 1; i >= 0; i-- {
+		ancestorIDs[len(ancestors)-1-i] = ancestors[i].ID
+	}
+	return ancestorIDs
+}
+
 // GetAncestorIDAtDepth returns the ancestor ID of the specified node at a given depth.
 // Parameters:
 //   - id: The node ID whose ancestor to find
@@ -653,22 +673,48 @@ func (t *Tree[T]) GetAll(matcher func(T) bool) []*Node[T] {
 	return nodes
 }
 
-// ToTree converts the flat node structure to a hierarchical tree starting from the specified root ID.
-// Returns nil if the root node doesn't exist.
+// ToTree converts the flat node structure to a hierarchical nested tree structure
+// starting from the specified root ID. Returns nil if the root node doesn't exist.
 //
-// The returned tree is a deep copy where each node has its Children
-// slice populated with its child nodes, recursively.
+// Unlike methods that return flat lists of nodes (like GetChildren or GetDescendants),
+// this method returns a self-referential nested structure where:
+//   - Each node contains direct references to its children nodes in its Children field
+//   - These children nodes in turn contain references to their own children, and so on
+//   - The returned structure is a deep copy of the original nodes to prevent modification
+//     of the internal tree structure
 //
-// Example return structure for root ID 1:
+// This nested structure is particularly useful for:
+// - JSON serialization of the entire tree or subtree
+// - Passing to UI components that render trees
+// - Recursive processing of the tree structure
+// - Extracting a complete subtree for separate handling
 //
-//	Root (ID: 1, ParentID: 0)
-//	├── Children[0] (ID: 2, ParentID: 1, Data: Category{Title: "Child 1", ...})
-//	│   ├── Children[0] (ID: 4, ParentID: 2, Data: Category{Title: "Child 1.1", ...})
-//	│   └── Children[1] (ID: 5, ParentID: 2, Data: Category{Title: "Child 1.2", ...})
-//	│       ├── Children[0] (ID: 7, ParentID: 5, Data: Category{Title: "Child 1.2.1", ...})
-//	│       └── Children[1] (ID: 8, ParentID: 5, Data: Category{Title: "Child 1.2.2", ...})
-//	└── Children[1] (ID: 3, ParentID: 1, Data: Category{Title: "Child 2", ...})
-//	    └── Children[0] (ID: 6, ParentID: 3, Data: Category{Title: "Child 2.1", ...})
+// Example return structure (with concrete data) for root ID 1:
+//
+//	Node{
+//	    ID: 1,
+//	    ParentID: 0,
+//	    Data: {Title: "Root"},
+//	    Children: [
+//	        Node{
+//	            ID: 2,
+//	            ParentID: 1,
+//	            Data: {Title: "Child 1"},
+//	            Children: [
+//	                Node{ID: 4, ParentID: 2, Data: {Title: "Child 1.1"}, Children: []},
+//	                // ...more children
+//	            ]
+//	        },
+//	        Node{
+//	            ID: 3,
+//	            ParentID: 1,
+//	            Data: {Title: "Child 2"},
+//	            Children: [
+//	                // ...children
+//	            ]
+//	        }
+//	    ]
+//	}
 func (t *Tree[T]) ToTree(rootID int) *Node[T] {
 	t.Lock()
 	defer t.Unlock()

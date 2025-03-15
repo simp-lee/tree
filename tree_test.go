@@ -92,8 +92,8 @@ func TestLoad(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tree.Load(tt.data,
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
@@ -113,8 +113,8 @@ func TestLoadDataFormat(t *testing.T) {
 			name: "Empty data",
 			data: []TestCategory{},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid data: empty data",
 		},
@@ -124,7 +124,7 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 1, ParentID: 0, Title: "Root"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "id function is required",
 		},
@@ -134,7 +134,7 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 1, ParentID: 0, Title: "Root"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
 			},
 			wantErr: "parent id function is required",
 		},
@@ -144,8 +144,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 0, ParentID: 0, Title: "Invalid"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid data: item 0: ID must be positive",
 		},
@@ -155,8 +155,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: -1, ParentID: 0, Title: "Invalid"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid data: item 0: ID must be positive",
 		},
@@ -166,8 +166,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 1, ParentID: -1, Title: "Invalid"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid data: item 0: parent ID cannot be negative",
 		},
@@ -178,8 +178,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 1, ParentID: 0, Title: "Duplicate"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid data: duplicate node ID: 1",
 		},
@@ -189,8 +189,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 1, ParentID: 2, Title: "Invalid"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "invalid parent ID 2 for node 1",
 		},
@@ -201,8 +201,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 2, ParentID: 1, Title: "Node 2"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			//wantErr: "circular reference detected at node 1",
 			wantErr: "circular reference detected",
@@ -214,8 +214,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 2, ParentID: 1, Title: "Child"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "",
 		},
@@ -228,8 +228,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 4, ParentID: 2, Title: "Child 2"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "",
 		},
@@ -242,8 +242,8 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 4, ParentID: 3, Title: "Level 3"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 			},
 			wantErr: "",
 		},
@@ -255,9 +255,9 @@ func TestLoadDataFormat(t *testing.T) {
 				{ID: 3, ParentID: 1, Title: "A"},
 			},
 			options: []LoadOption[TestCategory]{
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
-				WithSort[TestCategory](func(a, b TestCategory) bool { return a.Title < b.Title }),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
+				WithSort(func(a, b TestCategory) bool { return a.Title < b.Title }),
 			},
 			wantErr: "",
 		},
@@ -323,8 +323,8 @@ func TestLoadDataFormat(t *testing.T) {
 func TestTreeOperations(t *testing.T) {
 	tree := New[TestCategory]()
 	err := tree.Load(getTestData(),
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -755,27 +755,27 @@ func findChildByID[T any](children []*Node[T], id int) *Node[T] {
 	return nil
 }
 
-// 辅助函数：打印树结构
-func printTreeStructure(t *testing.T, tree *Tree[TestCategory], nodeID int, level int) {
-	node, exists := tree.FindNode(nodeID)
-	if !exists {
-		return
-	}
+// // 辅助函数：打印树结构
+// func printTreeStructure(t *testing.T, tree *Tree[TestCategory], nodeID int, level int) {
+// 	node, exists := tree.FindNode(nodeID)
+// 	if !exists {
+// 		return
+// 	}
 
-	indent := strings.Repeat("  ", level)
-	t.Logf("%sNode: ID=%d, Title=%s", indent, node.ID, node.Data.Title)
+// 	indent := strings.Repeat("  ", level)
+// 	t.Logf("%sNode: ID=%d, Title=%s", indent, node.ID, node.Data.Title)
 
-	children := tree.GetChildren(nodeID)
-	for _, child := range children {
-		printTreeStructure(t, tree, child.ID, level+1)
-	}
-}
+// 	children := tree.GetChildren(nodeID)
+// 	for _, child := range children {
+// 		printTreeStructure(t, tree, child.ID, level+1)
+// 	}
+// }
 
 func TestFormatTreeDisplay(t *testing.T) {
 	tree := New[TestCategory]()
 	err := tree.Load(getTestData(),
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -831,8 +831,8 @@ func TestFormatTreeDisplay(t *testing.T) {
 func TestConcurrency(t *testing.T) {
 	tree := New[TestCategory]()
 	err := tree.Load(getTestData(),
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -870,8 +870,8 @@ func TestConcurrency(t *testing.T) {
 func TestEdgeCases(t *testing.T) {
 	tree := New[TestCategory]()
 	err := tree.Load(getTestData(),
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -919,8 +919,8 @@ func ExampleTree() {
 
 	// 加载数据
 	err := tree.Load(data,
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		fmt.Printf("Error loading data: %v\n", err)
@@ -981,9 +981,9 @@ func TestCustomSort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tree.Load(data,
-				WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-				WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
-				WithSort[TestCategory](tt.sortFunc),
+				WithIDFunc(func(c TestCategory) int { return c.ID }),
+				WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
+				WithSort(tt.sortFunc),
 			)
 			if err != nil {
 				t.Fatalf("Failed to load test data: %v", err)
@@ -1008,8 +1008,8 @@ func TestCustomSort(t *testing.T) {
 func TestTreeTraversal(t *testing.T) {
 	tree := New[TestCategory]()
 	err := tree.Load(getTestData(),
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -1066,8 +1066,8 @@ func TestTreeDepth(t *testing.T) {
 	}
 
 	err := tree.Load(data,
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -1109,8 +1109,8 @@ func TestSiblings(t *testing.T) {
 	}
 
 	err := tree.Load(data,
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		t.Fatalf("Failed to load test data: %v", err)
@@ -1188,8 +1188,8 @@ func BenchmarkTreeOperations(b *testing.B) {
 
 	tree := New[TestCategory]()
 	err := tree.Load(data,
-		WithIDFunc[TestCategory](func(c TestCategory) int { return c.ID }),
-		WithParentIDFunc[TestCategory](func(c TestCategory) int { return c.ParentID }),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
 	)
 	if err != nil {
 		b.Fatalf("Failed to load test data: %v", err)
@@ -1220,4 +1220,76 @@ func BenchmarkTreeOperations(b *testing.B) {
 			tree.FormatTreeDisplay(1, opt)
 		}
 	})
+}
+
+func TestGetNodePath(t *testing.T) {
+	tree := New[TestCategory]()
+	err := tree.Load(getTestData(),
+		WithIDFunc(func(c TestCategory) int { return c.ID }),
+		WithParentIDFunc(func(c TestCategory) int { return c.ParentID }),
+	)
+	if err != nil {
+		t.Fatalf("Failed to load test data: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		nodeID      int
+		includeSelf bool
+		want        []int
+	}{
+		{
+			name:        "Deep node with self",
+			nodeID:      15, // Child 1.2.2.2.2.2.1
+			includeSelf: true,
+			want:        []int{1, 2, 5, 8, 10, 12, 14, 15}, // 从根到当前节点的顺序
+		},
+		{
+			name:        "Deep node without self",
+			nodeID:      15, // Child 1.2.2.2.2.2.1
+			includeSelf: false,
+			want:        []int{1, 2, 5, 8, 10, 12, 14}, // 从根到父节点的顺序
+		},
+		{
+			name:        "Mid-level node with self",
+			nodeID:      5, // Child 1.2
+			includeSelf: true,
+			want:        []int{1, 2, 5},
+		},
+		{
+			name:        "Mid-level node without self",
+			nodeID:      5, // Child 1.2
+			includeSelf: false,
+			want:        []int{1, 2},
+		},
+		{
+			name:        "Root node with self",
+			nodeID:      1,
+			includeSelf: true,
+			want:        []int{1},
+		},
+		{
+			name:        "Root node without self",
+			nodeID:      1,
+			includeSelf: false,
+			want:        []int{},
+		},
+		{
+			name:        "Non-existent node",
+			nodeID:      999,
+			includeSelf: true,
+			want:        []int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := tree.GetNodePath(tt.nodeID, tt.includeSelf)
+
+			if !reflect.DeepEqual(path, tt.want) {
+				t.Errorf("GetNodePath(%d, %v) = %v, want %v",
+					tt.nodeID, tt.includeSelf, path, tt.want)
+			}
+		})
+	}
 }
